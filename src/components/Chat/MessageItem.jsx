@@ -156,13 +156,6 @@ const MessageItem = forwardRef(function MessageItem({
             )}
           </div>
 
-          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-            <span className="msg-time">{formatTime(message.timestamp)}</span>
-            {message.editedAt && !message.isUnsent && (
-              <span className="msg-edited">edited</span>
-            )}
-          </div>
-
           {totalReactions.length > 0 && (
             <div className="msg-reactions">
               {totalReactions.map(([emoji, uids]) => (
@@ -177,6 +170,13 @@ const MessageItem = forwardRef(function MessageItem({
               ))}
             </div>
           )}
+
+          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+            <span className="msg-time">{formatTime(message.timestamp)}</span>
+            {message.editedAt && !message.isUnsent && (
+              <span className="msg-edited">edited</span>
+            )}
+          </div>
         </div>
       </div>
     </div>

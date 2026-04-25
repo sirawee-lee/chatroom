@@ -619,9 +619,13 @@
   display: flex;
   flex-wrap: wrap;
   gap: 4px;
-  margin-top: 3px;
-  padding: 0 4px;
+  margin-top: -8px;
+  padding: 0 6px;
+  position: relative;
+  z-index: 5;
 }
+.msg-wrapper.own .msg-reactions { justify-content: flex-end; }
+.msg-wrapper.other .msg-reactions { justify-content: flex-start; }
 .reaction-chip {
   display: flex;
   align-items: center;
@@ -691,7 +695,8 @@
 }
 
 .chat-textarea {
-  flex: 1;
+  width: 100%;
+  display: block;
   resize: none;
   min-height: 38px;
   max-height: 120px;
