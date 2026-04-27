@@ -45,12 +45,18 @@ export default function UserProfilePopup({ uid, onClose }) {
           <div style={{ padding: '2rem', textAlign: 'center', color: 'var(--text-muted)' }}>Loading…</div>
         ) : (
           <div className="popup-body">
-            <div className="popup-avatar-circle">
+            <div className={`popup-avatar-circle${isBlocked ? ' blocked-avatar' : ''}`}>
               {profile.photoURL
                 ? <img src={profile.photoURL} alt="" />
                 : initials}
+              {isBlocked && <div className="blocked-slash" />}
             </div>
-            <div className="popup-username">{profile.username}</div>
+            <div className={`popup-username${isBlocked ? ' blocked-name' : ''}`}>
+              {profile.username}
+            </div>
+            {isBlocked && (
+              <div className="blocked-badge">🚫 Blocked</div>
+            )}
             <div className="popup-email">{profile.email}</div>
             {profile.phone && (
               <div className="popup-detail-row">

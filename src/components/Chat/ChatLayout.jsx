@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { db } from '../../firebase/config';
 import {
   collection, query, where, onSnapshot, orderBy,
-  addDoc, serverTimestamp, doc, getDoc,
+  addDoc, serverTimestamp, doc, getDoc, updateDoc, arrayRemove, deleteDoc, getDocs,
 } from 'firebase/firestore';
 import { useAuth } from '../../contexts/AuthContext';
 import Sidebar from './Sidebar';
@@ -59,6 +59,28 @@ export default function ChatLayout() {
     setSidebarHidden(true);
     setUnreadMap(prev => ({ ...prev, [room.id]: 0 }));
     lastSeenRef.current[room.id] = Date.now();
+  };
+
+  const handleDeleteRoom = async (roomId) => {
+    const roomRef = doc(db, 'chatrooms', roomId);
+    const room = rooms.find(r => r.id === roomId);
+    if (!room) return;
+
+    const remaining = (room.members || []).filter(uid => uid !== currentUser.uid);
+    if (remaining.length === 0) {
+      // Last member — delete the room entirely
+      const msgsSnap = await getDocs(collection(db, 'chatrooms', roomId, 'messages'));
+      await Promise.all(msgsSnap.docs.map(d => deleteDoc(d.ref)));
+      await deleteDoc(roomRef);
+    } else {
+      // Just leave the room
+      await updateDoc(roomRef, { members: arrayRemove(currentUser.uid) });
+    }
+
+    if (activeRoom?.id === roomId) {
+      setActiveRoom(null);
+      setSidebarHidden(false);
+    }
   };
 
   const handleOpenDM = async (friendUID) => {
@@ -122,6 +144,7 @@ export default function ChatLayout() {
         unreadMap={unreadMap}
         onSelectRoom={handleSelectRoom}
         onOpenDM={handleOpenDM}
+        onDeleteRoom={handleDeleteRoom}
         isMobileHidden={sidebarHidden}
       />
 

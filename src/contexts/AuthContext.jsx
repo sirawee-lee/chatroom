@@ -1,7 +1,7 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
 import { auth, db } from '../firebase/config';
 import { onAuthStateChanged } from 'firebase/auth';
-import { doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore';
+import { doc, getDoc, setDoc, onSnapshot, serverTimestamp } from 'firebase/firestore';
 
 const AuthContext = createContext(null);
 
@@ -13,18 +13,21 @@ export function AuthProvider({ children }) {
   const [currentUser, setCurrentUser] = useState(null);
   const [userProfile, setUserProfile] = useState(null);
   const [loading, setLoading] = useState(true);
+  const profileUnsubRef = useRef(null);
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, async (user) => {
+    const unsubAuth = onAuthStateChanged(auth, async (user) => {
       setCurrentUser(user);
+
+      // Tear down previous profile listener if any
+      profileUnsubRef.current?.();
+      profileUnsubRef.current = null;
 
       if (user) {
         const profileRef = doc(db, 'users', user.uid);
         const snap = await getDoc(profileRef);
 
-        if (snap.exists()) {
-          setUserProfile(snap.data());
-        } else {
+        if (!snap.exists()) {
           const newProfile = {
             uid: user.uid,
             email: user.email,
@@ -36,8 +39,12 @@ export function AuthProvider({ children }) {
             createdAt: serverTimestamp(),
           };
           await setDoc(profileRef, newProfile);
-          setUserProfile(newProfile);
         }
+
+        // Real-time listener — userProfile stays in sync automatically
+        profileUnsubRef.current = onSnapshot(profileRef, (s) => {
+          if (s.exists()) setUserProfile(s.data());
+        });
       } else {
         setUserProfile(null);
       }
@@ -45,9 +52,13 @@ export function AuthProvider({ children }) {
       setLoading(false);
     });
 
-    return unsubscribe;
+    return () => {
+      unsubAuth();
+      profileUnsubRef.current?.();
+    };
   }, []);
 
+  // Still exported for compatibility, but rarely needed now
   const refreshProfile = async () => {
     if (!currentUser) return;
     const snap = await getDoc(doc(db, 'users', currentUser.uid));

@@ -295,6 +295,8 @@ export default function ChatRoom({ room, onNewMessage, onBack, onToggleChatbot }
       {isDirectBlocked ? (
         <div className="blocked-overlay">
           🚫 You cannot send messages in this conversation.
+          {iBlockedMember && ' (You blocked this user)'}
+          {isBlockedByMember && !iBlockedMember && ' (You have been blocked by this user)'}
         </div>
       ) : (
         <MessageInput

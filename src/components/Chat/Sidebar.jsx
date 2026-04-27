@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { auth } from '../../firebase/config';
 import { signOut } from 'firebase/auth';
 import { useAuth } from '../../contexts/AuthContext';
@@ -6,13 +6,21 @@ import CreateRoomModal from '../Modals/CreateRoomModal';
 import ProfileModal from '../Profile/ProfileModal';
 import UserProfilePopup from '../Profile/UserProfilePopup';
 
-export default function Sidebar({ rooms, activeRoom, unreadMap, onSelectRoom, onOpenDM, friends, isMobileHidden }) {
+export default function Sidebar({ rooms, activeRoom, unreadMap, onSelectRoom, onOpenDM, onDeleteRoom, friends, isMobileHidden }) {
   const { userProfile } = useAuth();
   const [tab, setTab] = useState('chats');
   const [search, setSearch] = useState('');
   const [showCreate, setShowCreate] = useState(false);
   const [showProfile, setShowProfile] = useState(false);
   const [popupUID, setPopupUID] = useState(null);
+  const [confirmDeleteId, setConfirmDeleteId] = useState(null);
+
+  useEffect(() => {
+    if (!confirmDeleteId) return;
+    const handleClickOutside = () => setConfirmDeleteId(null);
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [confirmDeleteId]);
 
   const getInitials = (name) =>
     (name || '?').split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase();
@@ -91,27 +99,63 @@ export default function Sidebar({ rooms, activeRoom, unreadMap, onSelectRoom, on
               )}
               {filteredRooms.map(room => {
                 const unread = unreadMap[room.id] || 0;
+                const isConfirming = confirmDeleteId === room.id;
                 return (
-                  <div
-                    key={room.id}
-                    className={`room-item${activeRoom?.id === room.id ? ' active' : ''}`}
-                    onClick={() => onSelectRoom(room)}
-                  >
-                    <div className="room-avatar">{getInitials(room.name)}</div>
-                    <div className="room-info">
-                      <div className="room-name">{room.name}</div>
-                      <div className="room-last-msg">
-                        {room.lastMessage || 'No messages yet'}
+                  <div key={room.id}>
+                    <div
+                      className={`room-item${activeRoom?.id === room.id ? ' active' : ''}`}
+                      onClick={() => !isConfirming && onSelectRoom(room)}
+                    >
+                      <div className="room-avatar">{getInitials(room.name)}</div>
+                      <div className="room-info">
+                        <div className="room-name">{room.name}</div>
+                        <div className="room-last-msg">
+                          {room.lastMessage || 'No messages yet'}
+                        </div>
+                      </div>
+                      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '4px' }}>
+                        <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>
+                          {formatTime(room.lastMessageAt)}
+                        </span>
+                        {unread > 0 && (
+                          <span className="unread-badge badge-pulse">{unread > 99 ? '99+' : unread}</span>
+                        )}
+                        <button
+                          className="btn-icon room-delete-btn"
+                          title="Leave / delete chat"
+                          onClick={e => { e.stopPropagation(); setConfirmDeleteId(room.id); }}
+                        >
+                          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
+                            <polyline points="3 6 5 6 21 6"/>
+                            <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/>
+                            <path d="M10 11v6M14 11v6"/>
+                            <path d="M9 6V4h6v2"/>
+                          </svg>
+                        </button>
                       </div>
                     </div>
-                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '4px' }}>
-                      <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>
-                        {formatTime(room.lastMessageAt)}
-                      </span>
-                      {unread > 0 && (
-                        <span className="unread-badge badge-pulse">{unread > 99 ? '99+' : unread}</span>
-                      )}
-                    </div>
+
+                    {isConfirming && (
+                      <div className="delete-confirm-bar" onMouseDown={e => e.stopPropagation()}>
+                        <span>Delete "{room.name}"?</span>
+                        <div style={{ display: 'flex', gap: '6px' }}>
+                          <button
+                            className="btn-secondary"
+                            style={{ padding: '3px 10px', fontSize: '0.75rem' }}
+                            onClick={() => setConfirmDeleteId(null)}
+                          >
+                            Cancel
+                          </button>
+                          <button
+                            className="btn-danger"
+                            style={{ padding: '3px 10px', fontSize: '0.75rem' }}
+                            onClick={() => { onDeleteRoom(room.id); setConfirmDeleteId(null); }}
+                          >
+                            Delete
+                          </button>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 );
               })}
@@ -125,7 +169,9 @@ export default function Sidebar({ rooms, activeRoom, unreadMap, onSelectRoom, on
                   {search ? 'No results' : 'No friends yet. Join a chatroom!'}
                 </div>
               )}
-              {filteredFriends.map(friend => (
+              {filteredFriends.map(friend => {
+                const isBlocked = (userProfile?.blockedUsers || []).includes(friend.uid);
+                return (
                 <div
                   key={friend.uid}
                   className="friend-item"
@@ -133,13 +179,14 @@ export default function Sidebar({ rooms, activeRoom, unreadMap, onSelectRoom, on
                   title="Double-click to open chat"
                 >
                   <div
-                    className="friend-avatar"
+                    className={`friend-avatar${isBlocked ? ' blocked-avatar' : ''}`}
                     onClick={e => { e.stopPropagation(); setPopupUID(friend.uid); }}
                     title="View profile"
                   >
                     {friend.photoURL
                       ? <img src={friend.photoURL} alt="" />
                       : (friend.username || '?')[0].toUpperCase()}
+                    {isBlocked && <div className="blocked-slash" />}
                   </div>
                   <div className="room-info">
                     <div className="room-name">{friend.username || friend.email}</div>
@@ -155,7 +202,8 @@ export default function Sidebar({ rooms, activeRoom, unreadMap, onSelectRoom, on
                     </svg>
                   </button>
                 </div>
-              ))}
+                );
+              })}
             </>
           )}
         </div>
