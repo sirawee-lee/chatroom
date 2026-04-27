@@ -15,6 +15,7 @@ const MessageItem = forwardRef(function MessageItem({
   onCancelEdit,
   onReact,
   onClickReply,
+  onAvatarClick,
   currentUserId,
 }, ref) {
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
@@ -50,7 +51,12 @@ const MessageItem = forwardRef(function MessageItem({
 
       <div className={`msg-group ${isOwn ? 'msg-enter-own' : 'msg-enter'}`}>
         {!isOwn && (
-          <div className="msg-avatar">
+          <div
+            className="msg-avatar"
+            onClick={() => onAvatarClick?.(message.senderId)}
+            style={{ cursor: 'pointer' }}
+            title={`View ${message.senderName}'s profile`}
+          >
             {message.senderPhoto
               ? <img src={message.senderPhoto} alt="" />
               : (message.senderName || '?')[0].toUpperCase()}

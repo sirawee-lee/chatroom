@@ -4,16 +4,15 @@ import { signOut } from 'firebase/auth';
 import { useAuth } from '../../contexts/AuthContext';
 import CreateRoomModal from '../Modals/CreateRoomModal';
 import ProfileModal from '../Profile/ProfileModal';
+import UserProfilePopup from '../Profile/UserProfilePopup';
 
-export default function Sidebar({ rooms, activeRoom, unreadMap, onSelectRoom, isMobileHidden }) {
+export default function Sidebar({ rooms, activeRoom, unreadMap, onSelectRoom, onOpenDM, friends, isMobileHidden }) {
   const { userProfile } = useAuth();
+  const [tab, setTab] = useState('chats');
   const [search, setSearch] = useState('');
   const [showCreate, setShowCreate] = useState(false);
   const [showProfile, setShowProfile] = useState(false);
-
-  const filtered = rooms.filter(r =>
-    r.name?.toLowerCase().includes(search.toLowerCase())
-  );
+  const [popupUID, setPopupUID] = useState(null);
 
   const getInitials = (name) =>
     (name || '?').split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase();
@@ -29,64 +28,136 @@ export default function Sidebar({ rooms, activeRoom, unreadMap, onSelectRoom, is
     return d.toLocaleDateString();
   };
 
+  const filteredRooms = rooms.filter(r =>
+    r.name?.toLowerCase().includes(search.toLowerCase())
+  );
+
+  const filteredFriends = friends.filter(f =>
+    (f.username || '').toLowerCase().includes(search.toLowerCase()) ||
+    (f.email || '').toLowerCase().includes(search.toLowerCase())
+  );
+
   return (
     <>
       <div className={`sidebar${isMobileHidden ? ' hidden-mobile' : ''}`}>
         <div className="sidebar-header">
-          <h2>💬 Chats</h2>
+          <h2>💬 ChatRoom</h2>
+          {tab === 'chats' && (
+            <button
+              className="btn-icon"
+              onClick={() => setShowCreate(true)}
+              title="New chatroom"
+            >
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
+                <line x1="12" y1="5" x2="12" y2="19"/>
+                <line x1="5" y1="12" x2="19" y2="12"/>
+              </svg>
+            </button>
+          )}
+        </div>
+
+        {/* Tab bar */}
+        <div className="sidebar-tabs">
           <button
-            className="btn-icon"
-            onClick={() => setShowCreate(true)}
-            title="New chatroom"
+            className={`sidebar-tab${tab === 'chats' ? ' active' : ''}`}
+            onClick={() => setTab('chats')}
           >
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
-              <line x1="12" y1="5" x2="12" y2="19"/>
-              <line x1="5" y1="12" x2="19" y2="12"/>
-            </svg>
+            💬 Chats
+          </button>
+          <button
+            className={`sidebar-tab${tab === 'friends' ? ' active' : ''}`}
+            onClick={() => setTab('friends')}
+          >
+            👥 Friends
           </button>
         </div>
 
         <div className="sidebar-search">
           <input
             type="text"
-            placeholder="Search conversations…"
+            placeholder={tab === 'chats' ? 'Search conversations…' : 'Search friends…'}
             value={search}
             onChange={e => setSearch(e.target.value)}
           />
         </div>
 
         <div className="sidebar-rooms">
-          {filtered.length === 0 && (
-            <div style={{ padding: '1.5rem', textAlign: 'center', color: 'var(--text-muted)', fontSize: '0.85rem' }}>
-              {search ? 'No results' : 'No chats yet. Create one!'}
-            </div>
-          )}
-          {filtered.map(room => {
-            const unread = unreadMap[room.id] || 0;
-            return (
-              <div
-                key={room.id}
-                className={`room-item${activeRoom?.id === room.id ? ' active' : ''}`}
-                onClick={() => onSelectRoom(room)}
-              >
-                <div className="room-avatar">{getInitials(room.name)}</div>
-                <div className="room-info">
-                  <div className="room-name">{room.name}</div>
-                  <div className="room-last-msg">
-                    {room.lastMessage || 'No messages yet'}
+          {tab === 'chats' && (
+            <>
+              {filteredRooms.length === 0 && (
+                <div style={{ padding: '1.5rem', textAlign: 'center', color: 'var(--text-muted)', fontSize: '0.85rem' }}>
+                  {search ? 'No results' : 'No chats yet. Create one!'}
+                </div>
+              )}
+              {filteredRooms.map(room => {
+                const unread = unreadMap[room.id] || 0;
+                return (
+                  <div
+                    key={room.id}
+                    className={`room-item${activeRoom?.id === room.id ? ' active' : ''}`}
+                    onClick={() => onSelectRoom(room)}
+                  >
+                    <div className="room-avatar">{getInitials(room.name)}</div>
+                    <div className="room-info">
+                      <div className="room-name">{room.name}</div>
+                      <div className="room-last-msg">
+                        {room.lastMessage || 'No messages yet'}
+                      </div>
+                    </div>
+                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '4px' }}>
+                      <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>
+                        {formatTime(room.lastMessageAt)}
+                      </span>
+                      {unread > 0 && (
+                        <span className="unread-badge badge-pulse">{unread > 99 ? '99+' : unread}</span>
+                      )}
+                    </div>
                   </div>
+                );
+              })}
+            </>
+          )}
+
+          {tab === 'friends' && (
+            <>
+              {filteredFriends.length === 0 && (
+                <div style={{ padding: '1.5rem', textAlign: 'center', color: 'var(--text-muted)', fontSize: '0.85rem' }}>
+                  {search ? 'No results' : 'No friends yet. Join a chatroom!'}
                 </div>
-                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '4px' }}>
-                  <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>
-                    {formatTime(room.lastMessageAt)}
-                  </span>
-                  {unread > 0 && (
-                    <span className="unread-badge badge-pulse">{unread > 99 ? '99+' : unread}</span>
-                  )}
+              )}
+              {filteredFriends.map(friend => (
+                <div
+                  key={friend.uid}
+                  className="friend-item"
+                  onDoubleClick={() => onOpenDM(friend.uid)}
+                  title="Double-click to open chat"
+                >
+                  <div
+                    className="friend-avatar"
+                    onClick={e => { e.stopPropagation(); setPopupUID(friend.uid); }}
+                    title="View profile"
+                  >
+                    {friend.photoURL
+                      ? <img src={friend.photoURL} alt="" />
+                      : (friend.username || '?')[0].toUpperCase()}
+                  </div>
+                  <div className="room-info">
+                    <div className="room-name">{friend.username || friend.email}</div>
+                    <div className="room-last-msg">{friend.email}</div>
+                  </div>
+                  <button
+                    className="btn-icon"
+                    onClick={() => onOpenDM(friend.uid)}
+                    title="Open chat"
+                  >
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
+                      <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+                    </svg>
+                  </button>
                 </div>
-              </div>
-            );
-          })}
+              ))}
+            </>
+          )}
         </div>
 
         <div className="sidebar-footer">
@@ -117,6 +188,9 @@ export default function Sidebar({ rooms, activeRoom, unreadMap, onSelectRoom, is
 
       {showCreate && <CreateRoomModal onClose={() => setShowCreate(false)} />}
       {showProfile && <ProfileModal onClose={() => setShowProfile(false)} />}
+      {popupUID && (
+        <UserProfilePopup uid={popupUID} onClose={() => setPopupUID(null)} />
+      )}
     </>
   );
 }

@@ -10,6 +10,8 @@ import { stripHtml } from '../../utils/sanitize';
 import MessageItem from './MessageItem';
 import MessageInput from './MessageInput';
 import InviteMemberModal from '../Modals/InviteMemberModal';
+import UserProfilePopup from '../Profile/UserProfilePopup';
+import ProfileModal from '../Profile/ProfileModal';
 
 export default function ChatRoom({ room, onNewMessage, onBack, onToggleChatbot }) {
   const { currentUser, userProfile } = useAuth();
@@ -20,6 +22,8 @@ export default function ChatRoom({ room, onNewMessage, onBack, onToggleChatbot }
   const [searchQuery, setSearchQuery] = useState('');
   const [showSearch, setShowSearch] = useState(false);
   const [showInvite, setShowInvite] = useState(false);
+  const [popupUID, setPopupUID] = useState(null);
+  const [showOwnProfile, setShowOwnProfile] = useState(false);
   const [searchIdx, setSearchIdx] = useState(0);
   const messagesEndRef = useRef(null);
   const messageRefs = useRef({});
@@ -173,6 +177,14 @@ export default function ChatRoom({ room, onNewMessage, onBack, onToggleChatbot }
 
   const getMemberInfo = (uid) => members.find(m => m.uid === uid);
 
+  const handleAvatarClick = (uid) => {
+    if (uid === currentUser.uid) {
+      setShowOwnProfile(true);
+    } else {
+      setPopupUID(uid);
+    }
+  };
+
   return (
     <div className="chat-room">
       <div className="chat-header">
@@ -269,6 +281,7 @@ export default function ChatRoom({ room, onNewMessage, onBack, onToggleChatbot }
                   onCancelEdit={() => setEditingId(null)}
                   onReact={(emoji) => toggleReaction(msg.id, emoji)}
                   onClickReply={() => msg.replyTo && scrollToMessage(msg.replyTo.messageId)}
+                  onAvatarClick={handleAvatarClick}
                   currentUserId={currentUser.uid}
                   getMemberInfo={getMemberInfo}
                 />
@@ -300,6 +313,12 @@ export default function ChatRoom({ room, onNewMessage, onBack, onToggleChatbot }
           currentMembers={members}
           onClose={() => setShowInvite(false)}
         />
+      )}
+      {popupUID && (
+        <UserProfilePopup uid={popupUID} onClose={() => setPopupUID(null)} />
+      )}
+      {showOwnProfile && (
+        <ProfileModal onClose={() => setShowOwnProfile(false)} />
       )}
     </div>
   );

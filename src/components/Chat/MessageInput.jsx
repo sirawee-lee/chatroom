@@ -23,6 +23,8 @@ export default function MessageInput({ replyingTo, onCancelReply, onSendText, on
       }
     } finally {
       setSending(false);
+      // Wait for React to re-enable the textarea before focusing
+      setTimeout(() => textareaRef.current?.focus(), 0);
     }
   };
 

@@ -1144,6 +1144,152 @@
   color: var(--text-secondary);
 }
 
+/* ===== SIDEBAR TABS ===== */
+.sidebar-tabs {
+  display: flex;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+.sidebar-tab {
+  flex: 1;
+  padding: 0.6rem;
+  font-size: 0.82rem;
+  font-weight: 500;
+  color: var(--text-secondary);
+  border-bottom: 2px solid transparent;
+  transition: var(--transition);
+  text-align: center;
+}
+.sidebar-tab.active {
+  color: var(--text-primary);
+  border-bottom-color: var(--accent);
+}
+.sidebar-tab:hover:not(.active) {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+/* ===== FRIEND ITEM ===== */
+.friend-item {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.65rem 1rem;
+  cursor: pointer;
+  transition: background var(--transition);
+}
+.friend-item:hover { background: var(--bg-hover); }
+
+.friend-avatar {
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+  background: var(--accent-gradient);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  font-size: 1rem;
+  color: white;
+  flex-shrink: 0;
+  overflow: hidden;
+  cursor: pointer;
+  transition: opacity var(--transition), box-shadow var(--transition);
+}
+.friend-avatar:hover {
+  opacity: 0.85;
+  box-shadow: 0 0 0 2px var(--accent);
+}
+.friend-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+/* ===== USER PROFILE POPUP ===== */
+.user-profile-popup {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  width: 100%;
+  max-width: 340px;
+  animation: scaleIn 0.22s ease;
+  box-shadow: var(--shadow-lg);
+  overflow: hidden;
+}
+.popup-topbar {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.5rem;
+  padding: 0.75rem 1rem;
+  border-bottom: 1px solid var(--border);
+}
+.btn-block-user {
+  padding: 0.35rem 0.875rem;
+  border-radius: var(--radius-full);
+  font-size: 0.8rem;
+  font-weight: 600;
+  background: var(--danger-bg);
+  border: 1px solid var(--danger);
+  color: var(--danger);
+  transition: background var(--transition);
+  cursor: pointer;
+}
+.btn-block-user:hover { background: rgba(248,81,73,0.25); }
+.btn-block-user.is-blocked {
+  background: var(--accent-light);
+  border-color: var(--accent);
+  color: var(--accent);
+}
+.btn-block-user.is-blocked:hover { background: rgba(124,108,242,0.25); }
+
+.popup-body {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 1.5rem 1.5rem 1.75rem;
+  gap: 0.4rem;
+}
+.popup-avatar-circle {
+  width: 80px;
+  height: 80px;
+  border-radius: 50%;
+  background: var(--accent-gradient);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 2rem;
+  font-weight: 700;
+  color: white;
+  overflow: hidden;
+  margin-bottom: 0.5rem;
+  border: 3px solid var(--border);
+}
+.popup-avatar-circle img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.popup-username {
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+.popup-email {
+  font-size: 0.82rem;
+  color: var(--text-secondary);
+  margin-bottom: 0.25rem;
+}
+.popup-detail-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+  margin-top: 0.1rem;
+}
+
 /* ===== RWD ===== */
 @media (max-width: 768px) {
   :root { --sidebar-width: 100vw; }
