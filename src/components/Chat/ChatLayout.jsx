@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { db } from '../../firebase/config';
 import {
   collection, query, where, onSnapshot, orderBy,
-  addDoc, serverTimestamp, doc, getDoc, updateDoc, arrayRemove, deleteDoc, getDocs,
+  doc, updateDoc, arrayRemove, deleteDoc, getDocs,
 } from 'firebase/firestore';
 import { useAuth } from '../../contexts/AuthContext';
 import Sidebar from './Sidebar';
@@ -20,7 +20,6 @@ function saveLastRead(uid, map) {
 export default function ChatLayout() {
   const { currentUser } = useAuth();
   const [rooms, setRooms] = useState([]);
-  const [friends, setFriends] = useState([]);
   const [activeRoom, setActiveRoom] = useState(null);
   const [showChatbot, setShowChatbot] = useState(false);
   const [toasts, setToasts] = useState([]);
@@ -79,19 +78,6 @@ export default function ChatLayout() {
     return unsub;
   }, [currentUser]);
 
-  // Collect unique friends from rooms
-  useEffect(() => {
-    if (!rooms.length || !currentUser) return;
-    const allUIDs = new Set();
-    rooms.forEach(room => (room.members || []).forEach(uid => {
-      if (uid !== currentUser.uid) allUIDs.add(uid);
-    }));
-    if (!allUIDs.size) { setFriends([]); return; }
-    Promise.all([...allUIDs].map(uid =>
-      getDoc(doc(db, 'users', uid)).then(snap => snap.exists() ? { uid, ...snap.data() } : null)
-    )).then(profiles => setFriends(profiles.filter(Boolean)));
-  }, [rooms, currentUser]);
-
   useEffect(() => {
     if (Notification.permission === 'default') Notification.requestPermission();
   }, []);
@@ -140,26 +126,6 @@ export default function ChatLayout() {
     }
   };
 
-  const handleOpenDM = async (friendUID) => {
-    const existing = rooms.find(r =>
-      r.members?.length === 2 &&
-      r.members.includes(currentUser.uid) &&
-      r.members.includes(friendUID)
-    );
-    if (existing) { handleSelectRoom(existing); return; }
-    const friendProfile = friends.find(f => f.uid === friendUID);
-    const roomName = friendProfile?.username || friendUID;
-    const ref = await addDoc(collection(db, 'chatrooms'), {
-      name: roomName,
-      members: [currentUser.uid, friendUID],
-      createdAt: serverTimestamp(),
-      lastMessage: '',
-      lastMessageAt: serverTimestamp(),
-      createdBy: currentUser.uid,
-    });
-    handleSelectRoom({ id: ref.id, name: roomName, members: [currentUser.uid, friendUID] });
-  };
-
   const handleNewMessage = (roomId, msg) => {
     if (!msg || msg.senderId === currentUser.uid) return;
     if (document.hidden && Notification.permission === 'granted') {
@@ -181,11 +147,9 @@ export default function ChatLayout() {
     <div className="chat-layout">
       <Sidebar
         rooms={rooms}
-        friends={friends}
         activeRoom={activeRoom}
         unreadMap={unreadMap}
         onSelectRoom={handleSelectRoom}
-        onOpenDM={handleOpenDM}
         onDeleteRoom={handleDeleteRoom}
         isMobileHidden={sidebarHidden}
       />
