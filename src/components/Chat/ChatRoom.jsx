@@ -111,6 +111,10 @@ export default function ChatRoom({ room, onNewMessage, onBack, onToggleChatbot }
     await updateDoc(doc(db, 'chatrooms', room.id), {
       lastMessage: type === 'text' ? (clean || '') : `[${type}]`,
       lastMessageAt: serverTimestamp(),
+      lastMessageSenderId: currentUser.uid,
+      lastMessageSenderName: userProfile?.username || currentUser.email,
+      lastMessageSenderPhoto: userProfile?.photoURL || null,
+      lastMessageType: type,
     });
     setReplyingTo(null);
   };

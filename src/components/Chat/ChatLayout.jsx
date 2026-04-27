@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { db } from '../../firebase/config';
 import {
   collection, query, where, onSnapshot, orderBy,
@@ -8,6 +8,14 @@ import { useAuth } from '../../contexts/AuthContext';
 import Sidebar from './Sidebar';
 import ChatRoom from './ChatRoom';
 import Chatbot from './Chatbot';
+import ToastNotification from './ToastNotification';
+
+function loadLastRead(uid) {
+  try { return JSON.parse(localStorage.getItem(`lastRead_${uid}`) || '{}'); } catch { return {}; }
+}
+function saveLastRead(uid, map) {
+  try { localStorage.setItem(`lastRead_${uid}`, JSON.stringify(map)); } catch {}
+}
 
 export default function ChatLayout() {
   const { currentUser } = useAuth();
@@ -15,86 +23,130 @@ export default function ChatLayout() {
   const [friends, setFriends] = useState([]);
   const [activeRoom, setActiveRoom] = useState(null);
   const [showChatbot, setShowChatbot] = useState(false);
-  const [unreadMap, setUnreadMap] = useState({});
+  const [toasts, setToasts] = useState([]);
   const [sidebarHidden, setSidebarHidden] = useState(false);
-  const lastSeenRef = useRef({});
+
+  const activeRoomRef = useRef(null);
+  const lastReadRef = useRef({});
+  const prevRoomMsgAtRef = useRef({});   // track previous lastMessageAt per room for toast
+
+  useEffect(() => { activeRoomRef.current = activeRoom; }, [activeRoom]);
+
+  // Load lastRead from localStorage once on login
+  useEffect(() => {
+    if (!currentUser) return;
+    lastReadRef.current = loadLastRead(currentUser.uid);
+  }, [currentUser?.uid]);
 
   useEffect(() => {
     if (!currentUser) return;
-
     const q = query(
       collection(db, 'chatrooms'),
       where('members', 'array-contains', currentUser.uid),
       orderBy('lastMessageAt', 'desc')
     );
-
     const unsub = onSnapshot(q, (snap) => {
-      setRooms(snap.docs.map(d => ({ id: d.id, ...d.data() })));
-    });
+      const newRooms = snap.docs.map(d => ({ id: d.id, ...d.data() }));
 
+      // Detect new messages for toast (only fires on live updates, not initial load)
+      newRooms.forEach(room => {
+        const prevMs = prevRoomMsgAtRef.current[room.id];
+        const curMs = room.lastMessageAt?.toMillis?.() ?? (room.lastMessageAt?.seconds ?? 0) * 1000;
+
+        if (prevMs !== undefined && curMs > prevMs
+          && room.lastMessageSenderId
+          && room.lastMessageSenderId !== currentUser.uid
+          && activeRoomRef.current?.id !== room.id
+        ) {
+          setToasts(p => [...p, {
+            id: Date.now() + Math.random(),
+            roomId: room.id,
+            roomName: room.name || 'ChatRoom',
+            msg: {
+              senderName: room.lastMessageSenderName || '?',
+              senderPhoto: room.lastMessageSenderPhoto || null,
+              text: room.lastMessage || '',
+              type: room.lastMessageType || 'text',
+              isUnsent: false,
+            },
+          }]);
+        }
+        prevRoomMsgAtRef.current[room.id] = curMs;
+      });
+
+      setRooms(newRooms);
+    });
     return unsub;
   }, [currentUser]);
 
-  // Collect unique friends from all rooms
+  // Collect unique friends from rooms
   useEffect(() => {
     if (!rooms.length || !currentUser) return;
     const allUIDs = new Set();
-    rooms.forEach(room =>
-      (room.members || []).forEach(uid => {
-        if (uid !== currentUser.uid) allUIDs.add(uid);
-      })
-    );
+    rooms.forEach(room => (room.members || []).forEach(uid => {
+      if (uid !== currentUser.uid) allUIDs.add(uid);
+    }));
     if (!allUIDs.size) { setFriends([]); return; }
-    Promise.all(
-      [...allUIDs].map(uid =>
-        getDoc(doc(db, 'users', uid)).then(snap =>
-          snap.exists() ? { uid, ...snap.data() } : null
-        )
-      )
-    ).then(profiles => setFriends(profiles.filter(Boolean)));
+    Promise.all([...allUIDs].map(uid =>
+      getDoc(doc(db, 'users', uid)).then(snap => snap.exists() ? { uid, ...snap.data() } : null)
+    )).then(profiles => setFriends(profiles.filter(Boolean)));
   }, [rooms, currentUser]);
 
+  useEffect(() => {
+    if (Notification.permission === 'default') Notification.requestPermission();
+  }, []);
+
+  // Compute unreadMap from rooms + localStorage
+  // activeRoom is a dependency so badge clears immediately when user opens a room
+  const unreadMap = useMemo(() => {
+    if (!currentUser) return {};
+    const map = {};
+    rooms.forEach(room => {
+      if (room.id === activeRoom?.id) { map[room.id] = 0; return; }
+      if (!room.lastMessageAt || !room.lastMessageSenderId) return;
+      if (room.lastMessageSenderId === currentUser.uid) return;
+
+      const lastRead = lastReadRef.current[room.id] || 0;
+      const msgMs = room.lastMessageAt?.toMillis?.() ?? (room.lastMessageAt?.seconds ?? 0) * 1000;
+      if (msgMs > lastRead) map[room.id] = 1;
+    });
+    return map;
+  }, [rooms, currentUser, activeRoom]);
+
   const handleSelectRoom = (room) => {
+    // Mark room as read
+    lastReadRef.current[room.id] = Date.now();
+    saveLastRead(currentUser.uid, lastReadRef.current);
+
     setActiveRoom(room);
     setSidebarHidden(true);
-    setUnreadMap(prev => ({ ...prev, [room.id]: 0 }));
-    lastSeenRef.current[room.id] = Date.now();
   };
 
   const handleDeleteRoom = async (roomId) => {
     const roomRef = doc(db, 'chatrooms', roomId);
     const room = rooms.find(r => r.id === roomId);
     if (!room) return;
-
     const remaining = (room.members || []).filter(uid => uid !== currentUser.uid);
     if (remaining.length === 0) {
-      // Last member — delete the room entirely
       const msgsSnap = await getDocs(collection(db, 'chatrooms', roomId, 'messages'));
       await Promise.all(msgsSnap.docs.map(d => deleteDoc(d.ref)));
       await deleteDoc(roomRef);
     } else {
-      // Just leave the room
       await updateDoc(roomRef, { members: arrayRemove(currentUser.uid) });
     }
-
-    if (activeRoom?.id === roomId) {
+    if (activeRoomRef.current?.id === roomId) {
       setActiveRoom(null);
       setSidebarHidden(false);
     }
   };
 
   const handleOpenDM = async (friendUID) => {
-    // Find existing 1-on-1 room
     const existing = rooms.find(r =>
       r.members?.length === 2 &&
       r.members.includes(currentUser.uid) &&
       r.members.includes(friendUID)
     );
-    if (existing) {
-      handleSelectRoom(existing);
-      return;
-    }
-    // Create new DM room
+    if (existing) { handleSelectRoom(existing); return; }
     const friendProfile = friends.find(f => f.uid === friendUID);
     const roomName = friendProfile?.username || friendUID;
     const ref = await addDoc(collection(db, 'chatrooms'), {
@@ -110,30 +162,20 @@ export default function ChatLayout() {
 
   const handleNewMessage = (roomId, msg) => {
     if (!msg || msg.senderId === currentUser.uid) return;
-    const isActive = activeRoom?.id === roomId;
-    const isHidden = document.hidden;
-
-    if (!isActive || isHidden) {
-      setUnreadMap(prev => ({
-        ...prev,
-        [roomId]: (prev[roomId] || 0) + 1,
-      }));
-
-      if (Notification.permission === 'granted') {
-        const room = rooms.find(r => r.id === roomId);
-        new Notification(`New message in ${room?.name || 'ChatRoom'}`, {
-          body: msg.isUnsent ? 'Message unsent' : (msg.text || (msg.type === 'image' ? '📷 Image' : '🖼️ Sticker')),
-          icon: '/favicon.ico',
-        });
-      }
+    if (document.hidden && Notification.permission === 'granted') {
+      const room = rooms.find(r => r.id === roomId);
+      new Notification(`New message in ${room?.name || 'ChatRoom'}`, {
+        body: msg.isUnsent ? 'Message unsent' : (msg.text || (msg.type === 'image' ? '📷 Image' : '🖼️ Sticker')),
+        icon: '/favicon.ico',
+      });
     }
   };
 
-  useEffect(() => {
-    if (Notification.permission === 'default') {
-      Notification.requestPermission();
-    }
-  }, []);
+  const dismissToast = (id) => setToasts(prev => prev.filter(t => t.id !== id));
+  const handleToastClick = (roomId) => {
+    const room = rooms.find(r => r.id === roomId);
+    if (room) handleSelectRoom(room);
+  };
 
   return (
     <div className="chat-layout">
@@ -153,7 +195,7 @@ export default function ChatLayout() {
           key={activeRoom.id}
           room={activeRoom}
           onNewMessage={(msg) => handleNewMessage(activeRoom.id, msg)}
-          onBack={() => setSidebarHidden(false)}
+          onBack={() => { setSidebarHidden(false); }}
           onToggleChatbot={() => setShowChatbot(p => !p)}
         />
       ) : (
@@ -165,6 +207,12 @@ export default function ChatLayout() {
       )}
 
       {showChatbot && <Chatbot onClose={() => setShowChatbot(false)} />}
+
+      <ToastNotification
+        toasts={toasts}
+        onDismiss={dismissToast}
+        onClickToast={handleToastClick}
+      />
     </div>
   );
 }
