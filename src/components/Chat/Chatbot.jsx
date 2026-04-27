@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 
 const GEMINI_KEY = import.meta.env.VITE_GEMINI_API_KEY || '';
-const GEMINI_URL = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent';
+const GEMINI_URL = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent';
 
 export default function Chatbot({ onClose }) {
   const [messages, setMessages] = useState([
@@ -43,15 +43,23 @@ export default function Chatbot({ onClose }) {
         body: JSON.stringify({
           contents: history.current,
           generationConfig: { maxOutputTokens: 512, temperature: 0.7 },
+          safetySettings: [
+            { category: 'HARM_CATEGORY_HARASSMENT', threshold: 'BLOCK_NONE' },
+            { category: 'HARM_CATEGORY_HATE_SPEECH', threshold: 'BLOCK_NONE' },
+            { category: 'HARM_CATEGORY_SEXUALLY_EXPLICIT', threshold: 'BLOCK_NONE' },
+            { category: 'HARM_CATEGORY_DANGEROUS_CONTENT', threshold: 'BLOCK_NONE' },
+          ],
         }),
       });
 
       const data = await res.json();
-      const reply = data.candidates?.[0]?.content?.parts?.[0]?.text || 'Sorry, I could not generate a response.';
+      if (data.error) throw new Error(data.error.message);
+      const candidate = data.candidates?.[0];
+      const reply = candidate?.content?.parts?.[0]?.text || 'Sorry, I could not generate a response.';
       history.current.push({ role: 'model', parts: [{ text: reply }] });
       setMessages(prev => [...prev, { role: 'bot', text: reply }]);
-    } catch {
-      setMessages(prev => [...prev, { role: 'bot', text: 'Network error. Please try again.' }]);
+    } catch (err) {
+      setMessages(prev => [...prev, { role: 'bot', text: `Error: ${err.message}` }]);
     } finally {
       setLoading(false);
     }

@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 
-const TENOR_KEY = import.meta.env.VITE_TENOR_API_KEY || '';
+const GIPHY_KEY = import.meta.env.VITE_GIPHY_API_KEY || '';
 
 export default function GifPicker({ onSelect, onClose }) {
   const [query, setQuery] = useState('');
@@ -10,7 +10,7 @@ export default function GifPicker({ onSelect, onClose }) {
   const debounceRef = useRef(null);
 
   useEffect(() => {
-    fetchGifs('trending');
+    fetchGifs('');
   }, []);
 
   useEffect(() => {
@@ -22,19 +22,19 @@ export default function GifPicker({ onSelect, onClose }) {
   }, [onClose]);
 
   const fetchGifs = async (searchTerm) => {
-    if (!TENOR_KEY) {
+    if (!GIPHY_KEY) {
       setGifs([]);
       return;
     }
     setLoading(true);
     try {
-      const endpoint = searchTerm === 'trending'
-        ? `https://tenor.googleapis.com/v2/featured?key=${TENOR_KEY}&limit=20&media_filter=gif`
-        : `https://tenor.googleapis.com/v2/search?q=${encodeURIComponent(searchTerm)}&key=${TENOR_KEY}&limit=20&media_filter=gif`;
+      const endpoint = searchTerm
+        ? `https://api.giphy.com/v1/gifs/search?q=${encodeURIComponent(searchTerm)}&api_key=${GIPHY_KEY}&limit=20&rating=g`
+        : `https://api.giphy.com/v1/gifs/trending?api_key=${GIPHY_KEY}&limit=20&rating=g`;
 
       const res = await fetch(endpoint);
       const data = await res.json();
-      setGifs(data.results || []);
+      setGifs(data.data || []);
     } catch {
       setGifs([]);
     } finally {
@@ -47,14 +47,14 @@ export default function GifPicker({ onSelect, onClose }) {
     setQuery(val);
     clearTimeout(debounceRef.current);
     debounceRef.current = setTimeout(() => {
-      fetchGifs(val || 'trending');
+      fetchGifs(val);
     }, 500);
   };
 
   const getGifUrl = (gif) => {
-    return gif.media_formats?.tinygif?.url
-      || gif.media_formats?.gif?.url
-      || gif.url
+    return gif.images?.fixed_height_small?.url
+      || gif.images?.downsized?.url
+      || gif.images?.original?.url
       || '';
   };
 
@@ -77,7 +77,7 @@ export default function GifPicker({ onSelect, onClose }) {
         )}
         {!loading && gifs.length === 0 && (
           <div style={{ gridColumn: '1/-1', textAlign: 'center', padding: '1rem', color: 'var(--text-muted)', fontSize: '0.8rem' }}>
-            {TENOR_KEY ? 'No GIFs found' : 'Set VITE_TENOR_API_KEY in .env to enable GIFs'}
+            {GIPHY_KEY ? 'No GIFs found' : 'Set VITE_GIPHY_API_KEY in .env to enable GIFs'}
           </div>
         )}
         {gifs.map((gif) => {
@@ -87,9 +87,9 @@ export default function GifPicker({ onSelect, onClose }) {
             <img
               key={gif.id}
               src={url}
-              alt={gif.content_description || 'gif'}
+              alt={gif.title || 'gif'}
               loading="lazy"
-              onClick={() => onSelect(url)}
+              onClick={() => onSelect(gif.images?.original?.url || url)}
             />
           );
         })}
